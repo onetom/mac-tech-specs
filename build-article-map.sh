@@ -1,5 +1,5 @@
 #!/bin/bash
-# build-spec-map.sh — build/refresh the map of Apple Support "Technical
+# build-article-map.sh — build/refresh the map of Apple Support "Technical
 # Specifications" KB articles, keyed by the article's own title.
 #
 #   Output: data/apple-spec-articles.tsv   id <TAB> title (Mac rows only)
@@ -30,14 +30,14 @@
 # published later into an already-scanned gap.
 #
 # Usage:
-#   ./build-spec-map.sh                      # incremental: new ids + recheck
-#   ./build-spec-map.sh --range 111000 112000
-#   ./build-spec-map.sh --full               # re-sweep the whole known span
-#   ./build-spec-map.sh --target 125000      # how far forward to probe
-#   ./build-spec-map.sh --recheck 200        # re-verify last N ids (default 100)
-#   ./build-spec-map.sh --all                # keep non-Mac products too
-#   ./build-spec-map.sh --filter 'MacBook|iMac'
-#   ./build-spec-map.sh --out /path.tsv --state /path.state --jobs 12
+#   ./build-article-map.sh                      # incremental: new ids + recheck
+#   ./build-article-map.sh --range 111000 112000
+#   ./build-article-map.sh --full               # re-sweep the whole known span
+#   ./build-article-map.sh --target 125000      # how far forward to probe
+#   ./build-article-map.sh --recheck 200        # re-verify last N ids (default 100)
+#   ./build-article-map.sh --all                # keep non-Mac products too
+#   ./build-article-map.sh --filter 'MacBook|iMac'
+#   ./build-article-map.sh --out /path.tsv --state /path.state --jobs 12
 
 set -uo pipefail
 

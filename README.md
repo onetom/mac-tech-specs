@@ -1,11 +1,22 @@
-# Mac purchase-spec summary + official spec-sheet lookup
+# mac-tech-specs
+
+Print the specs that actually differ between Macs you can buy — chip, CPU
+performance/efficiency split, GPU cores, memory, built-in SSD — and resolve
+*this* machine to its official Apple "Tech Specs" page, then optionally write
+the whole thing out as Markdown.
+
+No dependencies beyond macOS plus `npx` (for defuddle, only with `--spec`).
+
+```bash
+./mac-tech-specs.sh --spec --locale=en-hk
+```
 
 Three pieces:
 
 | file | role |
 |---|---|
-| `mac-spec.sh` | reads this Mac, prints the purchase-relevant specs + identity + spec-sheet URLs; `--spec` writes a Markdown report |
-| `build-spec-map.sh` | harvests Apple's "Technical Specifications" KB articles into `data/apple-spec-articles.tsv` |
+| `mac-tech-specs.sh` | reads this Mac, prints the purchase-relevant specs + identity + spec-sheet URLs; `--spec` writes a Markdown report |
+| `build-article-map.sh` | harvests Apple's "Technical Specifications" KB articles into `data/apple-spec-articles.tsv` |
 | `data/apple-spec-articles.tsv` | the map: `article-id <TAB> product title` (160 Mac rows, ids 107000-124500) |
 
 ## How the machine is tied to its official spec page
@@ -53,13 +64,13 @@ dynamically — no table needed:
 ## Refreshing the map
 
 ```bash
-./build-spec-map.sh                     # incremental: new ids past the last
+./build-article-map.sh                     # incremental: new ids past the last
                                         # scanned max, plus a --recheck tail
-./build-spec-map.sh --range 111000 112000
-./build-spec-map.sh --full              # re-sweep the default span
-./build-spec-map.sh --target 125000     # how far forward to probe
-./build-spec-map.sh --recheck 200       # re-verify last N ids (default 100)
-./build-spec-map.sh --all               # keep iPhone/iPad rows too
+./build-article-map.sh --range 111000 112000
+./build-article-map.sh --full              # re-sweep the default span
+./build-article-map.sh --target 125000     # how far forward to probe
+./build-article-map.sh --recheck 200       # re-verify last N ids (default 100)
+./build-article-map.sh --all               # keep iPhone/iPad rows too
 ```
 
 `data/apple-spec-articles.state` holds `min <TAB> max <TAB> epoch` — the id span
@@ -79,7 +90,7 @@ Coverage found so far: **160 Mac spec articles**, ids 107000-124500, from
 `MacBook (original)` and iMac G5 up to `MacBook Pro (14-inch, 2023)` / `Mac Pro
 (2023)`. No M4/M5-era per-model article exists anywhere in that span — a full
 sweep of 107000-124500 found none — so for current-lineup machines
-`mac-spec.sh` falls back to `apple.com/<family>/specs/`.
+`mac-tech-specs.sh` falls back to `apple.com/<family>/specs/`.
 
 ## The title-suffix trap
 
@@ -98,7 +109,7 @@ the filter, re-run `--full` and compare the row count.
 
 ## Search-engine fallback (`--search`)
 
-On a map miss, `mac-spec.sh --search` asks a search engine instead:
+On a map miss, `mac-tech-specs.sh --search` asks a search engine instead:
 
 ```
 "<product-name>" Tech Specs site:support.apple.com
@@ -111,13 +122,13 @@ search result cannot produce a wrong URL — it just fails to verify.
 
 Treat it as best-effort. Both engines bot-throttle scripted queries hard: during
 testing DDG Lite began serving `anomaly` pages (HTTP 202) and Brave returned 429
-for many minutes after a handful of requests. Prefer `build-spec-map.sh --full`,
+for many minutes after a handful of requests. Prefer `build-article-map.sh --full`,
 which talks only to Apple and is the reason the map exists.
 
 ## Example
 
 ```
-$ ./mac-spec.sh --spec=MacBookPro18_2-specs.md --locale=en-hk
+$ ./mac-tech-specs.sh --spec=MacBookPro18_2-specs.md --locale=en-hk
 === MacBook Pro (16-inch, 2021) (MacBookPro18,2) ===
 Chip / SoC      Apple M1 Max
 CPU             10 (8 Performance and 2 Efficiency)
@@ -149,5 +160,5 @@ This project was built by **Qwen3.8-Flash-Next-Q4.gguf**, served by
 Everything above is therefore plausibly wrong somewhere. The parts that touch
 Apple's undocumented endpoints (id bands, `og:title` suffixes, bot-throttling
 behaviour) are empirical observations from October 2026, not contracts — re-run
-`./build-spec-map.sh --full` before trusting the map, and always sanity-check
+`./build-article-map.sh --full` before trusting the map, and always sanity-check
 the resolved `KB article` line against the printed product name.

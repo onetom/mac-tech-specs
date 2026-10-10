@@ -1,5 +1,5 @@
 #!/bin/bash
-# mac-spec.sh — summarize the "buying decision" specs of a Mac in one shot.
+# mac-tech-specs.sh — summarize the "buying decision" specs of a Mac in one shot.
 #
 # Everything here comes from system_profiler / ioreg / sysctl, i.e. the exact
 # knobs Apple lets you choose at purchase: chip, CPU core split, GPU cores,
@@ -7,14 +7,14 @@
 # model number) and the official spec-sheet URL.
 #
 # Usage:
-#   ./mac-spec.sh                    # human-readable summary
-#   ./mac-spec.sh --tsv              # TSV instead (for spreadsheets)
-#   ./mac-spec.sh --spec             # also fetch official spec sheet -> Markdown
-#   ./mac-spec.sh --spec=FILE.md     # ... to an explicit path
-#   ./mac-spec.sh --url=URL          # override the spec-sheet URL
-#   ./mac-spec.sh --locale=en-hk     # support.apple.com region (default: AppleLocale)
-#   ./mac-spec.sh --map=FILE.tsv     # override the KB map path
-#   ./mac-spec.sh --search           # on map miss: resolve via search engine,
+#   ./mac-tech-specs.sh                    # human-readable summary
+#   ./mac-tech-specs.sh --tsv              # TSV instead (for spreadsheets)
+#   ./mac-tech-specs.sh --spec             # also fetch official spec sheet -> Markdown
+#   ./mac-tech-specs.sh --spec=FILE.md     # ... to an explicit path
+#   ./mac-tech-specs.sh --url=URL          # override the spec-sheet URL
+#   ./mac-tech-specs.sh --locale=en-hk     # support.apple.com region (default: AppleLocale)
+#   ./mac-tech-specs.sh --map=FILE.tsv     # override the KB map path
+#   ./mac-tech-specs.sh --search           # on map miss: resolve via search engine,
 #                                    # verify og:title, cache into the map
 #
 # --spec uses `npx defuddle` (HTML -> Markdown); image references are kept.
