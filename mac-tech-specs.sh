@@ -16,6 +16,9 @@
 #   ./mac-tech-specs.sh --map=FILE.tsv     # override the KB map path
 #   ./mac-tech-specs.sh --search           # on map miss: resolve via search engine,
 #                                    # verify og:title, cache into the map
+#   ./mac-tech-specs.sh --everymac         # resolve the exact everymac spec page
+#                                    # (lookup page -> filter candidates by CPU/GPU
+#                                    # core counts parsed from the URL slug)
 #
 # --spec uses `npx defuddle` (HTML -> Markdown); image references are kept.
 
@@ -25,6 +28,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 TSV=0
 SEARCH=0         # --search: on map miss, resolve via search engine + verify
+EVERYMAC_RESOLVE=0   # --everymac: resolve exact everymac specs page
 FETCH=0          # --spec
 SPEC_OUT=""      # explicit output path, else derived
 SPEC_URL=""      # --url override
@@ -37,8 +41,9 @@ while (( $# )); do
     --url=*)           SPEC_URL="${1#--url=}"; FETCH=1 ;;
     --map=*)           MAP="${1#--map=}" ;;
     --search)          SEARCH=1 ;;
+    --everymac)        EVERYMAC_RESOLVE=1 ;;
     --locale=*)        LOCALE="${1#--locale=}" ;;
-    -h|--help)         sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help)         sed -n '2,24p' "$0"; exit 0 ;;
     *)                 echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -101,6 +106,45 @@ LOCALE=${LOCALE:-$(defaults read -g AppleLocale 2>/dev/null | sed -E 's/@.*//; s
 LOCALE=${LOCALE:-en-us}
 EVERYMAC="https://everymac.com/ultimate-mac-lookup/?identify=${model_id//,/%2C}"
 
+# ---- everymac: pick the right specs page among the lookup candidates ------
+# The lookup page can list several configs for one model id (e.g. MacBookPro18,2
+# -> M1 Max 24-core *and* 32-core GPU). The candidate URLs' slugs encode the
+# exact config ("...-10-core-cpu-32-core-gpu-16-2021-specs.html"), so we filter
+# them with the numbers system_profiler already told us. CPU total is parsed as
+# the leading integer of "10 (8 Performance and 2 Efficiency)".
+UA_EVERYMAC="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+cpu_total=$(grep -oE '^[0-9]+' <<<"${cores%% *}")
+resolve_everymac() {
+  local cands filtered
+  cands=$(curl -fsSL --max-time 20 -A "$UA_EVERYMAC" "$EVERYMAC" 2>/dev/null \
+            | grep -oE 'href="[^"]*specs[^"]*\.html"' \
+            | sed -E 's/^href="([^"]+)"$/https:\/\/everymac.com\1/' | sort -u)
+  [[ -z $cands ]] && { echo "everymac: no candidates on lookup page" >&2; return 1; }
+  filtered=$cands
+  # 1) GPU core count is the strongest discriminator
+  [[ -n $gpu_cores ]] && f=$(grep -E -- "-${gpu_cores}-core-gpu|-${gpu_cores}-core-(gpu|graphics)" <<<"$filtered" || true)
+  [[ -n $f ]] && filtered=$f
+  # 2) CPU core count (slugs use "N-core-cpu" or "N-core" for M1-style names)
+  if [[ $(wc -l <<<"$filtered") -gt 1 && -n $cpu_total ]]; then
+    f=$(grep -E -- "-${cpu_total}-core(-cpu|-gpu|-core)" <<<"$filtered" || true)
+    [[ -n $f ]] && filtered=$f
+  fi
+  # 3) still ambiguous -> screen size from the marketing name ("16-inch")
+  if [[ $(wc -l <<<"$filtered") -gt 1 ]]; then
+    local size; size=$(grep -oE '[0-9]{2}-inch' <<<"${product_name:-$model_name}" | grep -oE '[0-9]+' | head -1)
+    [[ -n $size ]] && { f=$(grep -E -- "-${size}(-|,)" <<<"$filtered" || true); [[ -n $f ]] && filtered=$f; }
+  fi
+  if [[ $(wc -l <<<"$filtered") -eq 1 ]]; then
+    EVERYMAC_SPECS_URL=$(sed -n 1p <<<"$filtered")
+    echo "everymac: matched $EVERYMAC_SPECS_URL" >&2
+    return 0
+  fi
+  echo "everymac: could not disambiguate $(wc -l <<<"$cands") candidates:" >&2
+  sed 's/^/  /' <<<"$filtered" >&2
+  EVERYMAC_SPECS_URL=$(sed -n 1p <<<"$filtered")   # best guess: first candidate
+  return 1
+}
+
 kb_id=""; kb_title=""
 if [[ -f $MAP && -n $product_name ]]; then
   kb_id=$(awk -F'\t' -v n="$product_name" 'tolower($2)==tolower(n){print $1; exit}' "$MAP")
@@ -149,6 +193,9 @@ resolve_kb_by_search() {
 }
 (( SEARCH )) && [[ -z $kb_id && -n $product_name ]] && resolve_kb_by_search
 
+EVERYMAC_SPECS_URL=""
+(( EVERYMAC_RESOLVE )) && resolve_everymac
+
 if [[ -z $SPEC_URL ]]; then
   if [[ -n $kb_id ]]; then
     SPEC_URL="https://support.apple.com/${LOCALE}/${kb_id}"
@@ -170,8 +217,10 @@ fetch_spec() {
   local ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
   {
     printf '# %s (%s)\n\n' "${product_name:-$model_name}" "$model_id"
-    printf -- '- Model number: `%s`\n- Serial: `%s`\n- Official spec sheet: %s\n- EveryMac (unofficial, good for CTO configs): %s\n\n' \
-      "$model_number" "$serial" "$SPEC_URL" "$EVERYMAC"
+    printf -- '- Model number: `%s`\n- Serial: `%s`\n- Official spec sheet: %s\n- EveryMac (unofficial, good for CTO configs): %s\n' \
+      "$model_number" "$serial" "$SPEC_URL" "${EVERYMAC_SPECS_URL:-$EVERYMAC}"
+    [[ -n $EVERYMAC_SPECS_URL ]] && printf -- '- EveryMac lookup (all configs for this model id): %s\n' "$EVERYMAC"
+    printf '\n'
     printf '## Raw `system_profiler` output\n\n```text\n$ %s\n\n' "$cmd"
     $cmd 2>/dev/null
     printf '```\n\n---\n\n## Apple spec sheet\n\n'
@@ -200,8 +249,8 @@ fetch_spec() {
 
 if (( TSV )); then
   printf 'field\tvalue\n'
-  printf 'chip\t%s\nproduct_name\t%s\nmodel_id\t%s\nmodel_number\t%s\nserial\t%s\ncpu_cores\t%s\ngpu_cores\t%s\nmemory\t%s\nssd\t%s\nssd_model\t%s\ndisplay\t%s\nmetal\t%s\nmacos\t%s\ncycle_count\t%s\nkb_article\t%s\nspec_url\t%s\neverymac_url\t%s\n' \
-    "$chip" "$product_name" "$model_id" "$model_number" "$serial" "$cores" "$gpu_cores" "$ram" "$ssd_cap" "$ssd_model" "$panel" "$metal" "$osver" "$cycles" "${kb_id:-none}" "$SPEC_URL" "$EVERYMAC"
+  printf 'chip\t%s\nproduct_name\t%s\nmodel_id\t%s\nmodel_number\t%s\nserial\t%s\ncpu_cores\t%s\ngpu_cores\t%s\nmemory\t%s\nssd\t%s\nssd_model\t%s\ndisplay\t%s\nmetal\t%s\nmacos\t%s\ncycle_count\t%s\nkb_article\t%s\nspec_url\t%s\neverymac_url\t%s\neverymac_specs_url\t%s\n' \
+    "$chip" "$product_name" "$model_id" "$model_number" "$serial" "$cores" "$gpu_cores" "$ram" "$ssd_cap" "$ssd_model" "$panel" "$metal" "$osver" "$cycles" "${kb_id:-none}" "$SPEC_URL" "$EVERYMAC" "${EVERYMAC_SPECS_URL:-none}"
   (( FETCH )) && fetch_spec
   exit 0
 fi
@@ -223,6 +272,7 @@ Battery cycles  ${cycles}
 KB article      ${kb_id:-not in map}  ${kb_title:+($kb_title)}
 Official        ${SPEC_URL}
 EveryMac        ${EVERYMAC}
+${EVERYMAC_SPECS_URL:+EveryMac match  ${EVERYMAC_SPECS_URL}}
 EOF
 
 (( FETCH )) && fetch_spec

@@ -125,6 +125,31 @@ testing DDG Lite began serving `anomaly` pages (HTTP 202) and Brave returned 429
 for many minutes after a handful of requests. Prefer `build-article-map.sh --full`,
 which talks only to Apple and is the reason the map exists.
 
+## Exact everymac config page (`--everymac`)
+
+The everymac lookup page for a model id can list several configs — e.g.
+`MacBookPro18,2` returns both the M1 Max **24-core GPU** and **32-core GPU**
+pages. The candidate URLs' slugs encode the exact config:
+
+```
+macbook-pro-m1-max-10-core-cpu-32-core-gpu-16-2021-specs.html
+                  ^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^
+                  CPU cores     GPU cores     display size
+```
+
+so `--everymac` scrapes the lookup page for `*specs*.html` links and filters
+them with numbers `system_profiler` already reported:
+
+1. `GPU cores` from `SPDisplaysDataType` → `-<N>-core-gpu`
+2. CPU total (leading integer of `Total Number of Cores`) → `-<N>-core-cpu`
+3. if still ambiguous, the inch size from the marketing name (`16-inch`)
+
+The leading hyphen in each pattern is required so `8-core` never matches
+`10-core`. One candidate left → printed as `EveryMac match` and used in the
+`--spec` output; otherwise the remaining candidates are listed on stderr and
+the first is used as a best guess. Works on every model id tested so far
+(silicon and Intel slugs both use the `N-core` convention).
+
 ## Example
 
 ```
