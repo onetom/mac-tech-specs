@@ -1,0 +1,7 @@
+# generated spec reports
+*-specs.md
+*.specs.md
+
+# scan scratch
+*.tmp
+.DS_Store
